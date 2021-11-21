@@ -11,6 +11,8 @@ import math
 import numpy
 import scipy.spatial
 import startinpy
+
+import random
 #-----
 
 def nn_interpolation(list_pts_3d, jparams):
@@ -26,40 +28,66 @@ def nn_interpolation(list_pts_3d, jparams):
         (output file written to disk)
  
     """
-
-    # print("cellsize:", jparams['cellsize'])
+    print("cellsize:", jparams['cellsize'])
 
     #-- to speed up the nearest neighbour use a kd-tree
     # https://docs.scipy.org/doc/scipy/reference/generated/scipy.spatial.KDTree.html#scipy.spatial.KDTree
     # https://docs.scipy.org/doc/scipy/reference/generated/scipy.spatial.KDTree.query.html#scipy.spatial.KDTree.query
     # kd = scipy.spatial.KDTree(list_pts_3d)
     # d, i = kd.query(p, k=1)
+    cellsize = jparams['cellsize']
+    x = []
+    y = []
+    list_pts_xy = []
 
-    nnTree = scipy.spatial.KDTree(list_pts_3d)
+    #-- CONVERT TO 2D XY
+    for p in list_pts_3d:
+        x.append(p[0])
+        y.append(p[1])
+        list_pts_xy.append([p[0], p[1]])
 
-    dd, ii = nnTree.query(list_pts_3d)
+    nnTree = scipy.spatial.KDTree(list_pts_xy)
 
     min_x, min_y = nnTree.mins[0], nnTree.mins[1]
     max_x, max_y = nnTree.maxes[0], nnTree.maxes[1]
 
-    #-- Bounding Box
+    #-- BOUNDING BOX (BBOX)
     bound_x = max_x - min_x
     bound_y = max_y - min_y
 
     #-- CELL SIZE = 2.0
-    ncols = int(round(bound_x / jparams['cellsize']))
-    nrows = int(round(bound_y / jparams['cellsize']))
+    ncols = int(math.ceil(bound_x / jparams['cellsize']))
+    nrows = int(math.ceil(bound_y / jparams['cellsize']))
 
-    #-- Writing to file
+    # #-- RASTER GRID POINTS
+    # raster = []
+    # all_i = []
+    # for row in range(nrows, 0, -1):  # from the left-upper corner
+    #     for column in range(ncols):
+    #         rgrid = [min_x + column * jparams['cellsize'] + 0.5 * jparams['cellsize'], min_y + row * jparams['cellsize'] - 0.5 * jparams['cellsize']]
+    #         dd, ii = nnTree.query(rgrid)
+    #         raster.append(rgrid)
+    #         all_i.append(ii)
+
+    raster = []
+    all_i = []
+
+    #-- Writing to File
     with open(jparams['output-file'], 'w') as f:
         f.write(f"NCOLS {ncols}\n"
                 f"NROWS {nrows}\n"
                 f"XLLCORNER {min_x}\n"
                 f"YLLCORNER {min_y}\n"
                 f"CELLSIZE {jparams['cellsize']}\n"
-                f"NODATA_VALUE -9999\n"
-                f"{bound_x}\n"
-                f"{bound_y}\n")
+                f"NODATA_VALUE -9999\n")
+        for row in range(nrows, 0, -1):  # from the left-upper corner
+            for column in range(ncols):
+                rgrid = [min_x + column * jparams['cellsize'] + 0.5 * jparams['cellsize'],
+                         min_y + row * jparams['cellsize'] - 0.5 * jparams['cellsize']]
+                dd, ii = nnTree.query(rgrid)
+                z_val = list_pts_3d[ii]
+                f.write(str(z_val[2]))
+                f.write(' ')
 
     print("File written to", jparams['output-file'])
 
@@ -75,7 +103,9 @@ def idw_interpolation(list_pts_3d, jparams):
     Output:
         (output file written to disk)
  
-    """  
+    """
+    nodata_value = -9999
+
     print("cellsize:", jparams['cellsize'])
     print("radius:", jparams['radius1'])
     print("power:", jparams['power'])
@@ -84,6 +114,9 @@ def idw_interpolation(list_pts_3d, jparams):
     print("angle:", jparams['angle'])
     print("max_points:", jparams['max_points'])
     print("min_points:", jparams['min_points'])
+
+    # #-- CONVEX HULL
+    # hull = scipy.spatial.ConvexHull(2d_xy)
 
     #-- to speed up the nearest neighbour us a kd-tree
     # https://docs.scipy.org/doc/scipy/reference/generated/scipy.spatial.KDTree.html#scipy.spatial.KDTree
@@ -96,27 +129,26 @@ def idw_interpolation(list_pts_3d, jparams):
     min_x, min_y = idwTree.mins[0], idwTree.mins[1]
     max_x, max_y = idwTree.maxes[0], idwTree.maxes[1]
 
-    # -- Bounding Box
+    # -- BOUNDING BOX (BBOX)
     bound_x = max_x - min_x
     bound_y = max_y - min_y
 
     # -- Calculate NCOLS and NROWS
-    ncols = int(round(bound_x / jparams['cellsize']))
-    nrows = int(round(bound_y / jparams['cellsize']))
+    ncols = int(math.ceil(bound_x / jparams['cellsize']))
+    nrows = int(math.ceil(bound_y / jparams['cellsize']))
 
     idwList = idwTree.query_ball_point(list_pts_3d, jparams['radius1'])
 
-
-    #-- writing to file
+    #-- Writing to file
     with open(jparams['output-file'], 'w') as idwFile:
-        idwFile.write(f"NCOLS {ncols}\n"
-                      f"NROWS {nrows}\n"
-                      f"XLLCORNER {min_x}\n"
-                      f"YLLCORNER {min_y}\n"
-                      f"CELLSIZE {jparams['cellsize']} \n"
-                      f"NODATA_VALUE -9999\n"
-                      f"{idwTree.size}")
-    #
+        idwFile.write(f"NCOLS {ncols}\n")
+        idwFile.write(f"NROWS {nrows}\n")
+        idwFile.write(f"XLLCORNER {min_x}\n")
+        idwFile.write(f"YLLCORNER {min_y}\n")
+        idwFile.write(f"CELLSIZE {jparams['cellsize']} \n")
+        idwFile.write(f"NODATA_VALUE {nodata_value}\n")
+        idwFile.write(f"{idwTree.size}")
+
     print("File written to", jparams['output-file'])
 
 
