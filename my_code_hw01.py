@@ -251,7 +251,7 @@ def idw_interpolation(list_pts_3d, jparams):
         f.write("\n end")
 
 
-                    # search_ellipse = (((x[i] - x_coord) * math.cos(a) + (y[i] - y_coord) * math.sin(a)) ** 2 / r1 ** 2) + (((x[i] - x_coord) * math.sin(a) + (y[i] - y_coord) * math.cos(a)) ** 2 / r2 ** 2)
+               # search_ellipse = (((x[i] - x_coord) * math.cos(a) + (y[i] - y_coord) * math.sin(a)) ** 2 / r1 ** 2) + (((x[i] - x_coord) * math.sin(a) + (y[i] - y_coord) * math.cos(a)) ** 2 / r2 ** 2)
 
                 # if search_ellipse <= 1:
                 #     pt_results.append([xxx, yyy])
@@ -326,7 +326,6 @@ def laplace_interpolation(list_pts_3d, jparams):
     # how to use it: https://github.com/hugoledoux/startinpy#examples
     # you are *not* allowed to use the function for the laplace interpolation that I wrote for startinpy
     # you need to write your own code for this step
-
 
     #-- writing to file ar
     # with open(jparams['output-file'], 'w') as f:
