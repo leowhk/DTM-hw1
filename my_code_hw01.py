@@ -20,6 +20,7 @@ def grid_write(list_pts_3d, jparams):
     x = []
     y = []
     list_pts= []
+    r_grid = []
 
     # -- CONVERT TO 2D XY
     for p in list_pts_3d:
@@ -38,10 +39,54 @@ def grid_write(list_pts_3d, jparams):
     ncols = math.ceil(bound_x / cellsize)
     nrows = math.ceil(bound_y / cellsize)
 
-    asc = "NCOLS {}\nNROWS {}\nXLLCORNER {}\nYLLCORNER {}\nCELLSIZE {}\nNODATA_VALUE -9999\n".format(ncols, nrows,min_x,min_y,cellsize)
+    # -- GRID POINTS
+    for row in range(nrows, 0, -1):  # FROM LEFT UPPER CORNER
+        for column in range(ncols):
+            x_coord = min_x + column * jparams['cellsize'] + 0.5 * jparams['cellsize']
+            y_coord = min_y + row * jparams['cellsize'] - 0.5 * jparams['cellsize']
+            grid_coord = [x_coord, y_coord]
+            r_grid.append(grid_coord)
+
+    asc = "NCOLS {}\nNROWS {}\nXLLCORNER {}\nYLLCORNER {}\nCELLSIZE {}\nNODATA_VALUE -9999\n".format(ncols, nrows, min_x, min_y, cellsize)
 
 
-    return list_pts,asc,nrows,ncols, min_x, min_y
+    return list_pts, asc, nrows, ncols, min_x, min_y, r_grid
+
+# def is_point_inside_ellipse(pt, polygon, on=True):
+#     """
+#     Function that tests if a point is inside a polygon.
+#
+#     Input:
+#         pt:         the point to test (a tuple of coordinates)
+#         polygon:    a ring of the polygon represented by a list of tuple.
+#         on:         if the point on the boundary is considered inside. 'True' means inside and vice versa.
+#     Output:
+#         True:       pt is inside polygon
+#         False:      pt is outside polygon
+#     """
+#     flag = False
+#     for i in range(len(polygon) - 1):
+#         x = pt[0]
+#         y = pt[1]
+#         x1 = polygon[i][0]
+#         y1 = polygon[i][1]
+#         x2 = polygon[i + 1][0]
+#         y2 = polygon[i + 1][1]
+#
+#         if on and ((x == x1 and y == y1) or (
+#                 x == x2 and y == y2)):  # pt is on the border (one of the vertices) of the polygon
+#             return True
+#
+#         if y1 <= y < y2 or y2 <= y < y1:
+#             x_crossing_point = (x2 - x1) / (y2 - y1) * (y - y1) + x1
+#             if on and x_crossing_point == x:  # pt is on the border (not horizontal lines) of the polygon
+#                 return True
+#             elif x_crossing_point > x:  # pt is inside (not on the border of) the polygon
+#                 flag = not flag
+#         elif on and y1 == y == y2:
+#             if x1 < x < x2 or x2 < x < x1:  # pt is on the border (horizontal lines) of the polygon
+#                 return True
+#     return flag
 
 def nn_interpolation(list_pts_3d, jparams):
     """
@@ -63,6 +108,7 @@ def nn_interpolation(list_pts_3d, jparams):
     # https://docs.scipy.org/doc/scipy/reference/generated/scipy.spatial.KDTree.query.html#scipy.spatial.KDTree.query
     # kd = scipy.spatial.KDTree(list_pts_3d)
     # d, i = kd.query(p, k=1)
+
     cellsize = jparams['cellsize']
     x = []
     y = []
@@ -100,7 +146,7 @@ def nn_interpolation(list_pts_3d, jparams):
     raster = []
     all_i = []
 
-    #-- Writing to File
+    #-- WRITING TO FILE
     with open(jparams['output-file'], 'w') as f:
         f.write(f"NCOLS {ncols}\n"
                 f"NROWS {nrows}\n"
@@ -108,7 +154,7 @@ def nn_interpolation(list_pts_3d, jparams):
                 f"YLLCORNER {min_y}\n"
                 f"CELLSIZE {jparams['cellsize']}\n"
                 f"NODATA_VALUE -9999\n")
-        for row in range(nrows, 0, -1):  # from the left-upper corner
+        for row in range(nrows, 0, -1):  # FROM LEFT UPPER CORNER
             for column in range(ncols):
                 rgrid = [min_x + column * jparams['cellsize'] + 0.5 * jparams['cellsize'],
                          min_y + row * jparams['cellsize'] - 0.5 * jparams['cellsize']]
@@ -144,7 +190,7 @@ def idw_interpolation(list_pts_3d, jparams):
     power = jparams['power']
     r1 = jparams['radius1']
     r2 = jparams['radius2']
-    a = jparams['angle']
+    a = math.radians(jparams['angle'])
 
     # #-- CONVEX HULL
     # hull = scipy.spatial.ConvexHull(2d_xy)
@@ -162,6 +208,8 @@ def idw_interpolation(list_pts_3d, jparams):
         x.append(p[0])
         y.append(p[1])
         list_pts_xy.append([p[0], p[1]])
+        sample_coord = tuple(p[0], p[1])
+
 
     idwTree = scipy.spatial.KDTree(list_pts_xy)
 
@@ -178,7 +226,7 @@ def idw_interpolation(list_pts_3d, jparams):
 
     # ellipse = (((j[0] - i[0]) * math.cos(a) + (j[1] - i[1]) * math.sin(a)) ** 2 / r1 ** 2) + (((j[0] - i[0]) * math.sin(a) + (j[1] - i[1]) * math.cos(a)) ** 2 / r2 ** 2)
 
-
+    rgrid = []
     #-- Writing to file
     with open(jparams['output-file'], 'w') as f:
         f.write(f"NCOLS {ncols}\n"
@@ -189,30 +237,37 @@ def idw_interpolation(list_pts_3d, jparams):
                 f"NODATA_VALUE -9999\n")
         for row in range(nrows, 0, -1):  # from the left-upper corner
             for column in range(ncols):
-                xx = min_x + column * jparams['cellsize'] + 0.5 * jparams['cellsize']
-                yy = min_y + row * jparams['cellsize'] - 0.5 * jparams['cellsize']
+                x_coord = min_x + column * jparams['cellsize'] + 0.5 * jparams['cellsize']
+                y_coord = min_y + row * jparams['cellsize'] - 0.5 * jparams['cellsize']
+                raster_coord = (x_coord, y_coord)
 
-                ellipse = (((j[0] - i[0]) * math.cos(a) + (j[1] - i[1]) * math.sin(a)) ** 2 / r1 ** 2) + (((j[0] - i[0]) * math.sin(a) + (j[1] - i[1]) * math.cos(a)) ** 2 / r2 ** 2)
 
-                # rgrid = [min_x + column * jparams['cellsize'] + 0.5 * jparams['cellsize'],
-                #          min_y + row * jparams['cellsize'] - 0.5 * jparams['cellsize']]
+                dist_less_than_fifteen = []
+                for i in range(len(list_pts_xy)):
+                    dist = math.hypot(x[i], y[i], x_coord, y_coord)
+                    if dist <= 15:
+                        dist_less_than_fifteen.append(dist)
+                        f.write(f"({i}, {dist_less_than_fifteen}) ")
+        f.write("\n end")
 
-                rgrid = [xx, yy]
 
-                f.write(f"{rgrid}")
+                    # search_ellipse = (((x[i] - x_coord) * math.cos(a) + (y[i] - y_coord) * math.sin(a)) ** 2 / r1 ** 2) + (((x[i] - x_coord) * math.sin(a) + (y[i] - y_coord) * math.cos(a)) ** 2 / r2 ** 2)
 
-                # ellipse = j[0]
-                # ellipse = (((j[0] - i[0]) * math.cos(a) + (j[1] - i[1]) * math.sin(a)) ** 2 / r1 ** 2) + (
-                #             ((j[0] - i[0]) * math.sin(a) + (j[1] - i[1]) * math.cos(a)) ** 2 / r2 ** 2)
-                #
+                # if search_ellipse <= 1:
+                #     pt_results.append([xxx, yyy])
+
+
+                # for i in range(0, len(list_pts_xy), 1):
+                #     dist = math.hypot(x[i], y[i], x_coord, y_coord)
+
+                # ellipse = (((x[i] - x_coord) * math.cos(a) + (y[i] - y_coord) * math.sin(a)) ** 2 / r1 ** 2) + \
+                #           (((x[i] - x_coord) * math.sin(a) + (y[i] - y_coord) * math.cos(a)) ** 2 / r2 ** 2)
+
                 # rgrid = [min_x + column * jparams['cellsize'] + 0.5 * jparams['cellsize'],
                 #          min_y + row * jparams['cellsize'] - 0.5 * jparams['cellsize']]
                 # dd, ii = idwTree.query(rgrid)
                 # z_val = list_pts_3d[ii]
                 # f.write(str(z_val[2]))
-                f.write('\n')
-
-
 
     print("File written to", jparams['output-file'])
 
@@ -245,38 +300,8 @@ def tin_interpolation(list_pts_3d, jparams):
     #-- writing to file ar
     # with open(jparams['output-file'], 'w') as f:
     #     f.write('ok it is written la')
-    list_pts_xy, ascii, nrows, ncols, min_x, min_y = grid_write(list_pts_3d, jparams)
-    dt = scipy.spatial.Delaunay(list_pts_xy)
-
-    with open(jparams['output-file'], 'w') as f:
-        f.write(ascii)
-        for row in range(nrows, 0, -1):  # from the left-upper corner
-            for column in range(ncols):
-                rgrid = [min_x + column * jparams['cellsize'] + 0.5 * jparams['cellsize'], min_y + row * jparams['cellsize'] - 0.5 * jparams['cellsize']]
-                #if is within convex hull
-                tr_index= dt.find_simplex(rgrid)
-                if tr_index!= -1: #Το index του τριγωνου στο οποίο ανήκει το σημείο μου. Από το delauny εχω ήδη index για  καθε τριγωνο που εχει δημιουργηθει
-                    tr_find= dt.simplices[dt.find_simplex(rgrid)] #returns the indices of the points of the simplex the corresponding point is in
-                    p0=list_pts_3d[tr_find[0]][2] #get as a result the z values of the points that form the triangle
-                    p1=list_pts_3d[tr_find[1]][2]
-                    p2=list_pts_3d[tr_find[2]][2]
-                    b = dt.transform[tr_index, :2].dot(numpy.transpose([(rgrid[0],rgrid[1])] - dt.transform[tr_index, 2]))
-                    weigths=numpy.c_[numpy.transpose(b), 1 - b.sum(axis=0)]
-                    z_val=(p0*weigths[0][0]) + (p1*weigths[0][1]) + (p2*weigths[0][2])
-                    f.write(str(z_val))
-                    f.write('\n')
-                else:
-                    z_val=-9999
-                    f.write(str(z_val))
-                    f.write('\n')
 
     print("File written to", jparams['output-file'])
-
-
-
-
-    print("File written to", jparams['output-file'])
-
 
 
 def laplace_interpolation(list_pts_3d, jparams):
